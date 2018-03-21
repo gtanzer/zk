@@ -78,7 +78,7 @@ uint8_t verify(int64_t conn, uint64_t n, uint8_t (*graph)[n], uint64_t *cycle, u
         verbose_printf("\n");
     }
     
-    uint8_t b = random_flip(0);
+    uint8_t b = random_flip();
     int64_t err = write(conn, &b, sizeof(uint8_t));
     if(err < 0) {
         perror("b write() failed");
@@ -110,6 +110,7 @@ uint8_t verify(int64_t conn, uint64_t n, uint8_t (*graph)[n], uint64_t *cycle, u
                     _exit(1);
                 }
             }
+            verbose_printf("\n");
             
             nread = read(conn, salts, sz);
             if(nread < sz) {
@@ -195,7 +196,7 @@ uint8_t amplify_verify(int64_t conn, uint64_t nrounds, uint64_t n, uint8_t (*gra
     uint64_t *permutation = (uint64_t *) calloc(n, sizeof(uint64_t));
     uint8_t *visited = (uint8_t *) malloc(n);
 
-    (void) random_flip(nrounds);
+    random_init(nrounds);
 
     uint8_t accept = 1;
     for(uint64_t i = 0; i < nrounds; i++) {

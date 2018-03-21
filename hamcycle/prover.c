@@ -4,13 +4,6 @@
 #include "zklib.h"
 
 
-void permute(uint64_t n, uint64_t *permutation) {
-    for(uint64_t i = 0; i < n; i++) {
-        permutation[i] = i;
-    }
-}
-
-
 void commit(uint64_t n, uint8_t (*graph)[n], uint8_t (*commitment)[n][32], uint8_t (*salts)[n][32], uint64_t *permutation) {
     
     permute(n, permutation);
@@ -114,7 +107,7 @@ void amplify_prove(int64_t conn, uint64_t nrounds, uint64_t n, uint8_t (*graph)[
     uint8_t (*salts)[n][32] = (uint8_t (*)[n][32]) malloc(sz);
     uint64_t *permutation = (uint64_t *) calloc(n, sizeof(uint64_t));
     
-    (void) random_fill(n * n * 32, NULL);
+    random_init(n * n * 32);
     
     for(uint64_t i = 0; i < nrounds; i++) {
         prove(conn, n, graph, cycle, commitment, salts, permutation);
