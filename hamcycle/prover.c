@@ -1,29 +1,13 @@
 // Garrett Tanzer
 // zk hamiltonian cycle prover
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdint.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <math.h>
-#include <openssl/sha.h>
-
-#define UDS_NAME "hamcycle"
-#define QUEUE 1
-#define NROUNDS_DEFAULT 64
-
-void generate_salt(uint8_t *salt) {
-
-}
+#include "zklib.h"
 
 
-void permute(uint64_t n, uint64_t permutation) {
-
+void permute(uint64_t n, uint64_t *permutation) {
+    for(uint64_t i = 0; i < n; i++) {
+        permutation[i] = i;
+    }
 }
 
 
@@ -36,7 +20,7 @@ void commit(uint64_t n, uint8_t (*graph)[n], uint8_t (*commitment)[n][32], uint8
             uint64_t p = permutation[i];
             uint64_t q = permutation[j];
             
-            generate_salt(&salts[p][q][0]);
+            random_fill(32, &salts[p][q][0]);
             salts[p][q][31] = graph[i][j];
             
             (void) SHA256(&salts[p][q][0], 32, &commitment[p][q][0]);
@@ -65,7 +49,8 @@ void prove(int64_t conn, uint64_t n, uint8_t (*graph)[n], uint64_t *cycle, uint8
     switch(b) {
     
         case 0: {   // decommit the entire permuted adjacency matrix
-            err = write(conn, permutation, n);
+        
+            err = write(conn, permutation, n * sizeof(uint64_t));
             if(err < 0) {
                 perror("permutation write() failed");
                 _exit(1);
@@ -80,6 +65,34 @@ void prove(int64_t conn, uint64_t n, uint8_t (*graph)[n], uint64_t *cycle, uint8
         }
         
         case 1: {   // decommit only the hamiltonian cycle
+            
+            uint64_t *pcycle = (uint64_t *) commitment[0];
+            uint8_t (*psalts)[32] = commitment[1];
+            
+            for(uint64_t i = 0; i < n+1; i++) {
+                pcycle[i] = permutation[cycle[i]];
+            }
+            
+            for(uint64_t i = 0; i < n; i++) {
+                uint64_t p = pcycle[i];
+                uint64_t q = pcycle[i+1];
+                
+                for(uint64_t k = 0; k < 32; k++) {
+                    psalts[i][k] = salts[p][q][k];
+                }
+            }
+            
+            err = write(conn, pcycle, (n+1) * sizeof(uint64_t));
+            if(err < 0) {
+                perror("salts write() failed");
+                _exit(1);
+            }
+            
+            err = write(conn, psalts, n * 32);
+            if(err < 0) {
+                perror("salts write() failed");
+                _exit(1);
+            }
         
             break;
             
@@ -99,7 +112,9 @@ void amplify_prove(int64_t conn, uint64_t nrounds, uint64_t n, uint8_t (*graph)[
     uint64_t sz = n * n * 32;
     uint8_t (*commitment)[n][32] = (uint8_t (*)[n][32]) malloc(sz);
     uint8_t (*salts)[n][32] = (uint8_t (*)[n][32]) malloc(sz);
-    uint64_t *permutation = (uint64_t *) malloc(n);
+    uint64_t *permutation = (uint64_t *) calloc(n, sizeof(uint64_t));
+    
+    (void) random_fill(n * n * 32, NULL);
     
     for(uint64_t i = 0; i < nrounds; i++) {
         prove(conn, n, graph, cycle, commitment, salts, permutation);
@@ -138,7 +153,7 @@ int main(int argc, char **argv) {
     
     int64_t err = bind(fd, (struct sockaddr *) &server, sizeof(struct sockaddr_un));
     if(err < 0) {
-        perror("bind() failed\n");
+        perror("bind() failed");
         _exit(1);
     }
     
