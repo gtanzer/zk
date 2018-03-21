@@ -15,31 +15,79 @@
 #define UDS_NAME "hamcycle"
 #define NROUNDS_DEFAULT 64
 
+uint8_t flip_coin(void) {
+    return 0;
+}
 
-uint8_t verify(int64_t conn, uint64_t n, uint8_t (*graph)[n]) {
-    uint64_t len = strlen("hi");
-	
-	int64_t err = write(conn, (void *) &len, sizeof(size_t));
-	if(err < 0) {
-		perror("header write() failed");
-		_exit(1);
-	}
-	
-	err = write(conn, "hi", len);
-	if(err < 0) {
-		perror("body write() failed");
-		_exit(1);
-	}
+
+uint8_t verify(int64_t conn, uint64_t n, uint8_t (*graph)[n], uint8_t (*commitment)[n][32], uint8_t (*salts)[n][32], uint64_t *permutation) {
+
+    int64_t nread = read(conn, commitment, n * n * 32);
+    if(nread < sz) {
+        perror("commitment read() failed");
+        _exit(1);
+    }
+    
+    uint8_t b = flip_coin();
+    int64_t err = write(conn, &b, sizeof(uint8_t));
+    if(err < 0) {
+        perror("b write() failed");
+        _exit(1);
+    }
+    
+    switch(b) {
+        
+        case 0: {   // decommit the entire permuted adjacency matrix
+        
+            nread = read(conn, permutation, n);
+            if(nread < sz) {
+                perror("permutation read() failed");
+                _exit(1);
+            }
+            
+            nread = read(conn, salts, n * n * 32);
+            if(nread < sz) {
+                perror("salts read() failed");
+                _exit(1);
+            }
+            
+            break;
+            
+        }
+        
+        case 1: {   // decommit only the hamiltonian cycle
+        
+            break;
+            
+        }
+        
+        default: {
+            printf("b = %u\n", b);
+            _exit(1);
+        }
+        
+    }
     
     return 1;
 }
 
 
 uint8_t amplify_verify(int64_t conn, uint64_t nrounds, uint64_t n, uint8_t (*graph)[n]) {
+    
+    uint64_t sz = n * n * 32;
+    uint8_t (*commitment)[n][32] = (uint8_t (*)[n][32]) malloc(sz);
+    uint8_t (*salts)[n][32] = (uint8_t (*)[n][32]) malloc(sz);
+    uint64_t *permutation = (uint64_t *) malloc(n);
+
     uint8_t accept = 1;
     for(uint64_t i = 0; i < nrounds; i++) {
-        accept &= verify(conn, n, graph);
+        accept &= verify(conn, n, graph, commitment, salts, permutation);
     }
+    
+    free(commitment);
+    free(salts);
+    free(permutation);
+    
     return accept;
 }
 

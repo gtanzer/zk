@@ -18,15 +18,83 @@
 #define NROUNDS_DEFAULT 64
 
 
-void prove(int64_t fd, uint64_t n, uint8_t (*graph)[n], uint64_t *cycle) {
+void commit(uint64_t n, uint8_t (*graph)[n], uint8_t (*commitment)[n][32], uint8_t (*salts)[n][32], uint64_t *permutation) {
 
+    uint8_t cur[32];
+    
+    for(uint64_t i = 0; i < n; i++) {
+        for(uint64_t j = 0; j < n; j++) {
+            uint64_t p = permutation[i];
+            uint64_t q = permutation[j];
+            
+            (void) SHA256((uint8_t *) cur, 32, &salts[p][q][0]);
+        }
+    }
+}
+
+void prove(int64_t conn, uint64_t n, uint8_t (*graph)[n], uint64_t *cycle, uint8_t (*commitment)[n][32], uint8_t (*salts)[n][32], uint64_t *permutation) {
+    
+    commit(n, graph, commitment, salts, permutation);
+
+    int64_t err = write(conn, commitment, n * n * 32);
+    if(err < 0) {
+        perror("commitment write() failed");
+        _exit(1);
+    }
+    
+    uint8_t b;
+    int64_t nread = read(conn, &b, sizeof(uint8_t));
+    if(nread < 1) {
+        perror("b read() failed");
+        _exit(1);
+    }
+    
+    switch(b) {
+    
+        case 0: {   // decommit the entire permuted adjacency matrix
+            err = write(conn, permutation, n);
+            if(err < 0) {
+                perror("permutation write() failed");
+                _exit(1);
+            }
+        
+            err = write(conn, salts, n * n * 32);
+            if(err < 0) {
+                perror("salts write() failed");
+                _exit(1);
+            }
+            break;
+        }
+        
+        case 1: {   // decommit only the hamiltonian cycle
+        
+            break;
+            
+        }
+        
+        default: {
+            printf("b = %u\n", b);
+            _exit(1);
+        }
+        
+    }
 }
 
 
-void amplify_prove(int64_t fd, uint64_t nrounds, uint64_t n, uint8_t (*graph)[n], uint64_t *cycle) {
+void amplify_prove(int64_t conn, uint64_t nrounds, uint64_t n, uint8_t (*graph)[n], uint64_t *cycle) {
+    
+    uint64_t sz = n * n * 32;
+    uint8_t (*commitment)[n][32] = (uint8_t (*)[n][32]) malloc(sz);
+    uint8_t (*salts)[n][32] = (uint8_t (*)[n][32]) malloc(sz);
+    uint64_t *permutation = (uint64_t *) malloc(n);
+    
     for(uint64_t i = 0; i < nrounds; i++) {
-        prove(fd, n, graph, cycle);
+        prove(conn, n, graph, cycle, commitment, salts, permutation);
     }
+    
+    free(commitment);
+    free(salts);
+    free(permutation);
 }
 
 
@@ -131,9 +199,19 @@ int main(int argc, char **argv) {
     }
     free(optr);
     
+    for(uint64_t i = 0; i < n; i++) {
+        if(graph[cycle[i]][cycle[i+1]] != 1) {
+            printf("invalid cycle: (%llu, %llu) not an edge\n", cycle[i], cycle[i+1]);
+            _exit(1);
+        }
+    }
+    
     // ------ enter proof protocol ---------------------------------------------
     
     amplify_prove(conn, nrounds, n, graph, cycle);
+    
+    free(graph);
+    free(cycle);
 
     return 0;
 }
