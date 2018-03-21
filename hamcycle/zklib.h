@@ -16,7 +16,7 @@
 #define NROUNDS_DEFAULT 64
 #define QUEUE 1
 
-#define VERBOSE 0
+#define VERBOSE 1
 #if VERBOSE
     #define verbose_printf printf
 #else

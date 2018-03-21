@@ -71,7 +71,7 @@ uint8_t verify(int64_t conn, uint64_t n, uint8_t (*graph)[n], uint64_t *cycle, u
     for(uint64_t i = 0; i < n; i++) {
         for(uint64_t j = 0; j < n; j++) {
             for(uint64_t k = 0; k < 32; k++) {
-                verbose_printf("%x", commitment[i][j][k]);
+                verbose_printf("%02x", commitment[i][j][k]);
             }
             verbose_printf("\n");
         }
@@ -121,7 +121,7 @@ uint8_t verify(int64_t conn, uint64_t n, uint8_t (*graph)[n], uint64_t *cycle, u
             for(uint64_t i = 0; i < n; i++) {
                 for(uint64_t j = 0; j < n; j++) {
                     for(uint64_t k = 0; k < 32; k++) {
-                        verbose_printf("%x", salts[i][j][k]);
+                        verbose_printf("%02x", salts[i][j][k]);
                     }
                     verbose_printf("\n");
                 }
@@ -167,7 +167,7 @@ uint8_t verify(int64_t conn, uint64_t n, uint8_t (*graph)[n], uint64_t *cycle, u
             verbose_printf("salts:\n");
             for(uint64_t j = 0; j < n; j++) {
                 for(uint64_t k = 0; k < 32; k++) {
-                    verbose_printf("%x", salts[0][j][k]);
+                    verbose_printf("%02x", salts[0][j][k]);
                 }
                 verbose_printf("\n");
             }
