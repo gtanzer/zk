@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <math.h>
 #include <openssl/sha.h>
 
 #define UDS_NAME "hamcycle"
@@ -17,14 +18,14 @@
 #define NROUNDS_DEFAULT 64
 
 
-void prove(int64_t fd, uint64_t n) {
+void prove(int64_t fd, uint64_t n, uint8_t (*graph)[n], uint64_t *cycle) {
 
 }
 
 
-void amplify_prove(int64_t fd, uint64_t nrounds, uint64_t n) {
+void amplify_prove(int64_t fd, uint64_t nrounds, uint64_t n, uint8_t (*graph)[n], uint64_t *cycle) {
     for(uint64_t i = 0; i < nrounds; i++) {
-        prove(fd, n);
+        prove(fd, n, graph, cycle);
     }
 }
 
@@ -43,7 +44,7 @@ int main(int argc, char **argv) {
 
     // ------ open UDS for verifier --------------------------------------------
 
-    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    int64_t fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if(fd < 0) {
         perror("socket() failed");
         _exit(1);
@@ -54,7 +55,7 @@ int main(int argc, char **argv) {
     unlink(UDS_NAME);
     strncpy(server.sun_path, UDS_NAME, 100);
     
-    int err = bind(fd, (struct sockaddr *) &server, sizeof(struct sockaddr_un));
+    int64_t err = bind(fd, (struct sockaddr *) &server, sizeof(struct sockaddr_un));
     if(err < 0) {
         perror("bind() failed\n");
         _exit(1);
@@ -66,7 +67,7 @@ int main(int argc, char **argv) {
         _exit(1);
     }
     
-    int conn = accept(fd, NULL, NULL);
+    int64_t conn = accept(fd, NULL, NULL);
     if(conn < 0) {
         perror("accept() failed");
         _exit(1);
@@ -75,12 +76,64 @@ int main(int argc, char **argv) {
     // ------ receive graph from verifier --------------------------------------
     
     uint64_t n = 0;
+    uint64_t nread = read(conn, &n, sizeof(uint64_t));
+    if(nread < sizeof(uint64_t)) {
+        perror("n read() failed");
+        _exit(1);
+    }
+    
+    uint8_t (*graph)[n] = (uint8_t (*)[n]) calloc(n * n, 1);
+    
+    nread = read(conn, graph, n * n);
+    if(nread < n * n) {
+        perror("graph read() failed");
+        _exit(1);
+    }
+    
+    for(uint64_t i = 0; i < n; i++) {
+        for(uint64_t j = 0; j < n; j++) {
+            if(graph[i][j] != 0 && graph[i][j] != 1) {
+                printf("graph[%llu][%llu] = %u\n", i, j, graph[i][j]);
+                _exit(1);
+            }
+        }
+    }
     
     // ------ read cycle from stdin --------------------------------------------
     
+    char input[1UL << 6];
+    char *ret = fgets(input, sizeof(input), stdin);
+    if(ret == NULL) {
+        perror("fgets() failed");
+        _exit(1);
+    }
+    
+    uint64_t m = strtol(input, NULL, 10);
+    if(n != m || n == 0) {
+        printf("n: %llu but m: %llu\n", n, m);
+        _exit(1);
+    }
+    
+    uint64_t *cycle = calloc(n+1, sizeof(uint64_t));
+    
+    uint64_t logn = sizeof(n) * 8 - __builtin_clzl(n);
+    uint64_t sz = n * (logn/3 + 1) + 1;
+    char *iptr = malloc(sz);
+    char *optr = iptr;
+    
+    ret = fgets(iptr, sz, stdin);
+    if(ret == NULL) {
+        perror("fgets() failed");
+        _exit(1);
+    }
+    for(uint64_t i = 0; i < n+1; i++) {
+        cycle[i] = strtol(iptr, &iptr, 10);
+    }
+    free(optr);
+    
     // ------ enter proof protocol ---------------------------------------------
     
-    amplify_prove(fd, nrounds, n);
+    amplify_prove(conn, nrounds, n, graph, cycle);
 
     return 0;
 }

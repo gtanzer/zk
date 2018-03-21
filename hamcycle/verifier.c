@@ -16,20 +16,18 @@
 #define NROUNDS_DEFAULT 64
 
 
-uint8_t verify(int64_t fd, uint64_t n) {
+uint8_t verify(int64_t conn, uint64_t n, uint8_t (*graph)[n]) {
     uint64_t len = strlen("hi");
 	
-	int64_t err = write(fd, (void *) &len, sizeof(size_t));
+	int64_t err = write(conn, (void *) &len, sizeof(size_t));
 	if(err < 0) {
-		close(fd);
-		perror("header write() failed\n");
+		perror("header write() failed");
 		_exit(1);
 	}
 	
-	err = write(fd, "hi", len);
+	err = write(conn, "hi", len);
 	if(err < 0) {
-		close(fd);
-		perror("body write() failed\n");
+		perror("body write() failed");
 		_exit(1);
 	}
     
@@ -37,10 +35,10 @@ uint8_t verify(int64_t fd, uint64_t n) {
 }
 
 
-uint8_t amplify_verify(int64_t fd, uint64_t nrounds, uint64_t n) {
+uint8_t amplify_verify(int64_t conn, uint64_t nrounds, uint64_t n, uint8_t (*graph)[n]) {
     uint8_t accept = 1;
     for(uint64_t i = 0; i < nrounds; i++) {
-        accept &= verify(fd, n);
+        accept &= verify(conn, n, graph);
     }
     return accept;
 }
@@ -63,17 +61,18 @@ int main(int argc, char **argv) {
     char input[1UL << 6];
     char *ret = fgets(input, sizeof(input), stdin);
     if(ret == NULL) {
-        perror("fgets() failed\n");
+        perror("fgets() failed");
         _exit(1);
     }
     uint64_t n = strtol(input, NULL, 10);
     uint8_t (*graph)[n] = (uint8_t (*)[n]) calloc(n * n, 1);
     
-    char *iptr = malloc(2*n+1);
+    uint64_t sz = 2*n + 1;
+    char *iptr = malloc(sz);
     for(uint64_t i = 0; i < n; i++) {
-        ret = fgets(iptr, 2*n+1, stdin);
+        ret = fgets(iptr, sz, stdin);
         if(ret == NULL) {
-            perror("fgets() failed\n");
+            perror("fgets() failed");
             _exit(1);
         }
         for(uint64_t j = 0; j < n; j++) {
@@ -86,7 +85,7 @@ int main(int argc, char **argv) {
 
     int64_t fd = socket(AF_UNIX, SOCK_STREAM, 0);
 	if(fd < 0) {
-		perror("socket() failed\n");
+		perror("socket() failed");
 		_exit(1);
 	}
 	
@@ -96,21 +95,30 @@ int main(int argc, char **argv) {
 	
 	int64_t err = connect(fd, (struct sockaddr *) &server, sizeof(struct sockaddr_un));
 	if(err < 0) {
-		close(fd);
-		perror("connect() failed\n");
+		perror("connect() failed");
 		_exit(1);
 	}
     
     // ------ send graph to prover ---------------------------------------------
     
+    err = write(fd, &n, sizeof(uint64_t));
+	if(err < 0) {
+		perror("n write() failed");
+		_exit(1);
+	}
     
+    err = write(fd, graph, n * n);
+	if(err < 0) {
+		perror("graph write() failed");
+		_exit(1);
+	}
     
     // ------ enter proof protocol ---------------------------------------------
 
-    uint8_t accept = amplify_verify(fd, nrounds, n);
+    uint8_t accept = amplify_verify(fd, nrounds, n, graph);
     printf("%u\n", accept);
     
-    close(fd);
+    free(graph);
 
     return 0;
 }
