@@ -17,20 +17,33 @@
 #define QUEUE 1
 #define NROUNDS_DEFAULT 64
 
+void generate_salt(uint8_t *salt) {
+
+}
+
+
+void permute(uint64_t n, uint64_t permutation) {
+
+}
+
 
 void commit(uint64_t n, uint8_t (*graph)[n], uint8_t (*commitment)[n][32], uint8_t (*salts)[n][32], uint64_t *permutation) {
-
-    uint8_t cur[32];
+    
+    permute(n, permutation);
     
     for(uint64_t i = 0; i < n; i++) {
         for(uint64_t j = 0; j < n; j++) {
             uint64_t p = permutation[i];
             uint64_t q = permutation[j];
             
-            (void) SHA256((uint8_t *) cur, 32, &salts[p][q][0]);
+            generate_salt(&salts[p][q][0]);
+            salts[p][q][31] = graph[i][j];
+            
+            (void) SHA256(&salts[p][q][0], 32, &commitment[p][q][0]);
         }
     }
 }
+
 
 void prove(int64_t conn, uint64_t n, uint8_t (*graph)[n], uint64_t *cycle, uint8_t (*commitment)[n][32], uint8_t (*salts)[n][32], uint64_t *permutation) {
     

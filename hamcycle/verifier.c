@@ -20,9 +20,39 @@ uint8_t flip_coin(void) {
 }
 
 
-uint8_t verify(int64_t conn, uint64_t n, uint8_t (*graph)[n], uint8_t (*commitment)[n][32], uint8_t (*salts)[n][32], uint64_t *permutation) {
+uint8_t decommit_graph(uint64_t n, uint8_t (*commitment)[n][32], uint8_t (*salts)[n][32], uint64_t *permutation) {
 
-    int64_t nread = read(conn, commitment, n * n * 32);
+    uint8_t cur[32];
+
+    for(uint64_t i = 0; i < n; i++) {
+        for(uint64_t j = 0; j < n; j++) {
+            uint64_t p = permutation[i];
+            uint64_t q = permutation[j];
+        
+            if(salts[p][q][31] != graph[i][j]) {
+                printf("invalid salt\n");
+                return 0;
+            }
+            
+            (void) SHA256(&salts[p][q][0], 32, &cur);
+            for(uint64_t k = 0; k < 32; k++) {
+                if(cur[k] != commitment[p][q][k]) {
+                    printf("salt produces incorrect hash\n");
+                    return 0;
+                }
+            }
+        }
+    }
+    
+    return 1;
+}
+
+
+uint8_t verify(int64_t conn, uint64_t n, uint8_t (*graph)[n], uint64_t *cycle, uint8_t (*commitment)[n][32], uint8_t (*salts)[n][32], uint64_t *permutation, uint8_t *visited) {
+
+    uint64_t sz = n * n * 32;
+
+    int64_t nread = read(conn, commitment, sz);
     if(nread < sz) {
         perror("commitment read() failed");
         _exit(1);
@@ -40,22 +70,47 @@ uint8_t verify(int64_t conn, uint64_t n, uint8_t (*graph)[n], uint8_t (*commitme
         case 0: {   // decommit the entire permuted adjacency matrix
         
             nread = read(conn, permutation, n);
-            if(nread < sz) {
+            if(nread < n) {
                 perror("permutation read() failed");
                 _exit(1);
             }
             
-            nread = read(conn, salts, n * n * 32);
+            memset(visited, 0, n);
+            for(uint64_t i = 0; i < n; i++) {
+                if(visited[permutation[i]] == 0) {
+                    visited[permutation[i]] = 1;
+                }
+                else {
+                    printf("invalid permutation\n");
+                    _exit(1);
+                }
+            }
+            
+            nread = read(conn, salts, sz);
             if(nread < sz) {
                 perror("salts read() failed");
                 _exit(1);
             }
+            
+            return decommit_graph(n, commitment, salts, permutation);
             
             break;
             
         }
         
         case 1: {   // decommit only the hamiltonian cycle
+        
+            nread = read(conn, cycle, n+1);
+            if(nread < n+1) {
+                perror("cycle read() failed");
+                _exit(1);
+            }
+            
+            nread = read(conn, salts[0], n);
+            if(nread < n) {
+                perror("cycle salts read() failed");
+                _exit(1);
+            }
         
             break;
             
@@ -75,15 +130,18 @@ uint8_t verify(int64_t conn, uint64_t n, uint8_t (*graph)[n], uint8_t (*commitme
 uint8_t amplify_verify(int64_t conn, uint64_t nrounds, uint64_t n, uint8_t (*graph)[n]) {
     
     uint64_t sz = n * n * 32;
+    uint64_t *cycle = calloc(n+1, sizeof(uint64_t));
     uint8_t (*commitment)[n][32] = (uint8_t (*)[n][32]) malloc(sz);
     uint8_t (*salts)[n][32] = (uint8_t (*)[n][32]) malloc(sz);
     uint64_t *permutation = (uint64_t *) malloc(n);
+    uint8_t *visited = (uint8_t *) malloc(n);
 
     uint8_t accept = 1;
     for(uint64_t i = 0; i < nrounds; i++) {
-        accept &= verify(conn, n, graph, commitment, salts, permutation);
+        accept &= verify(conn, n, graph, cycle, commitment, salts, permutation, visited);
     }
     
+    free(cycle);
     free(commitment);
     free(salts);
     free(permutation);
