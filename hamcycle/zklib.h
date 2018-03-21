@@ -16,6 +16,8 @@
 #define NROUNDS_DEFAULT 64
 #define QUEUE 1
 
+
+// flag to enable verbose output
 #define VERBOSE 1
 #if VERBOSE
     #define verbose_printf printf
@@ -24,14 +26,13 @@
 #endif
 
 
-#define RBUFSZ 4096
-
 static int64_t fd = -1;
 static uint64_t n = 0;
 static uint64_t bufsz = 0;
 static uint8_t *buf = NULL;
 
 
+// refill the /dev/urandom cache
 static void buffer_refill(void) {
     int64_t nread = read(fd, buf, bufsz);
     if(nread < bufsz) {
@@ -42,6 +43,8 @@ static void buffer_refill(void) {
 }
 
 
+// must be called before using any other random functions
+//  `sz` is the read cache size
 void random_init(uint64_t sz) {
     bufsz = sz;
     
@@ -56,6 +59,7 @@ void random_init(uint64_t sz) {
 }
 
 
+// return a random 0 or 1
 uint8_t random_flip(void) {
     if(fd < 0) {
         printf("forgot to random_init()\n");
@@ -69,7 +73,8 @@ uint8_t random_flip(void) {
 }
 
 
-uint8_t random64(void) {
+// return a random 64-bit number
+uint64_t random64(void) {
     if(fd < 0) {
         printf("forgot to random_init()\n");
         _exit(1);
@@ -89,6 +94,8 @@ uint8_t random64(void) {
 }
 
 
+// fill the buffer `dst` with random bytes
+//  `dst` must be at least `len` bytes long
 void random_fill(uint64_t len, uint8_t *dst) {
     if(fd < 0) {
         printf("forgot to random_init()\n");
@@ -105,7 +112,8 @@ void random_fill(uint64_t len, uint8_t *dst) {
 
 
 // Fisher-Yates shuffle
-// produces a `permutation` of [0...n-1]
+// produces a random permutation of [0...n-1]
+//  `permutation` must be at least `n` uint64_ts long
 void permute(uint64_t n, uint64_t *permutation) {
     if(fd < 0) {
         printf("forgot to random_init()\n");
@@ -118,15 +126,20 @@ void permute(uint64_t n, uint64_t *permutation) {
     
     for(uint64_t i = n-1; i > 0; i--) {
         uint64_t j = n;
+        
+        // find a random j in [0, i]
         while(j > i) {
             j = random64();
     
+            // mod by the nearest (rounded up) power of 2 to i,
+            // so the distribution is uniform but j > i is unlikely
             uint64_t logn = sizeof(n) * 8 - __builtin_clzl(n);
             uint64_t mod = 1UL << logn;
             
             j = j % mod;
         }
     
+        // swap permutation[i] and permutation[j]
         uint64_t temp = permutation[j];
         permutation[j] = permutation[i];
         permutation[i] = temp;

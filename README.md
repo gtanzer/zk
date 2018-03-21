@@ -43,7 +43,6 @@ b_{1,0} b_{1,1} b_{1,2}...b_{1,n-1}
 .
 .
 b_{n-1,0} b_{n-1,1} b_{n-1,2}...b_{n-1,n-1}
-
 ```
 
 where each b_{i,j} in {0,1} represents the presence or absence of an edge connecting i to j
