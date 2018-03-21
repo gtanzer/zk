@@ -197,6 +197,7 @@ uint8_t verify(int64_t conn, uint64_t n, uint8_t (*graph)[n], uint64_t *cycle, u
             verbose_printf("%llu\n\n", cycle[0]);
             if(cycle[n] >= n || cycle[0] != cycle[n]) {
                 printf("incomplete cycle\n");
+                _exit(1);
             }
             
             // read the cycle's `salts` from the prover
