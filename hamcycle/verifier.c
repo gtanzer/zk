@@ -79,7 +79,7 @@ uint8_t decommit_cycle(uint64_t n, uint8_t (*commitment)[n][32], uint8_t (*salts
 
 
 // verify(conn, n, graph, cycle, commitment, salts, permutation, visited)
-//  perform a single round of the zk hamiltonian cycle protocol
+//  perform a single round of the zk hamiltonian cycle protocol as the verifier
 
 //  `conn`          socket file descriptor
 //  `n`             number of vertices
@@ -230,16 +230,15 @@ uint8_t verify(int64_t conn, uint64_t n, uint8_t (*graph)[n], uint64_t *cycle, u
 
 
 // amplify_verify(conn, nrounds, n, graph)
-//  perform the repeated zk hamiltonian cycle protocol
+//  perform the repeated zk hamiltonian cycle protocol as the verifier
 
 //  `conn`      socket file descriptor
 //  `nrounds`   number of rounds (soundness is 2^{-nrounds})
 //  `n`         number of vertices
-//  `graph`     n x n adjacency matrix, where each entry is 1 byte
+//  `graph`     n x n adjacency matrix
 
 uint8_t amplify_verify(int64_t conn, uint64_t nrounds, uint64_t n, uint8_t (*graph)[n]) {
     
-    // allocate all the memory
     uint64_t sz = n * n * 32;
     uint64_t *cycle = calloc(n+1, sizeof(uint64_t));
     uint8_t (*commitment)[n][32] = (uint8_t (*)[n][32]) malloc(sz);
@@ -258,7 +257,6 @@ uint8_t amplify_verify(int64_t conn, uint64_t nrounds, uint64_t n, uint8_t (*gra
         verbose_printf("\n");
     }
     
-    // free even though the program is about to exit anyway
     free(cycle);
     free(commitment);
     free(salts);
